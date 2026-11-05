@@ -1,5 +1,8 @@
 #lang eopl
-;Autores: Nombre1 Codigo1, Nombre2 Codigo2, ...
+;Autores: Andres Felipe Quiceno gil Codigo:2477362
+;Yonier Alejandro Vega Rojas Codigo:2477056
+;Jhon Fabricio Hurtado Marin Codigo: 2459472
+;Juan Esteban Aguirre Castañeda Codigo:2459676
 
 #|
   Interpretador de TxLang-UV.
@@ -25,8 +28,25 @@
 
 (define especificacion-lexica
   '((espacio (whitespace) skip)
+    ;;Comentario una linea
+    (comentario ("//" (arbno (not #\newline))) skip)
+    ;;Comentario Bloque
+     (comentario ("#|" (arbno (not #\|)) "|#") skip)
+     ;;Numeros Flotantes positivos
+    (flotante (digit (arbno digit) "." digit(arbno digit))number)
+    ;;Numeros Flotantes negativos
+    (flotante ("-" digit (arbno digit) "." digit(arbno digit))number)
+    ;;Numeros enteros 
     (numero (digit (arbno digit)) number)
-    (identificador (letter (arbno (or letter digit "-" "_" "?"))) symbol)))
+    ;;Numeros enteros negativos
+    (numero ("-" digit (arbno digit)) number)
+    ;;Identificadores
+    (identificador (letter (arbno (or letter digit "-" "_" "?"))) symbol)
+    ;;Chars caracteres
+    (caracter ("'" any "'") string)
+    ;;Cadenas de texto
+    (cadena ("\"" (arbno (not #\")) "\"" ) string)
+    ))
 
 ;;; ==========================================================
 ;;; 2. Especificación gramatical
@@ -35,8 +55,108 @@
 ;; expresión y primitiva. Los nombres de las variantes los escoge el grupo.
 
 (define especificacion-gramatical
-  '((programa (expresion) un-programa)
-    (expresion (numero) lit-exp)))
+  '((programa ((arbno decl-registro) expresion) un-programa)
+    (decl-registro ("record" identificador "{"
+     (separated-list campo-register "," ) "}")
+                   decl-program)
+    (campo-register (identificador ":" tipo) un-campo)
+    ;;Tipos del lenguaje
+    (tipo ("int") type-int)
+    (tipo ("float") type-float)
+    (tipo ("bool") type-bool)
+    (tipo ("string") type-string)
+    (tipo ("char") type-char)
+    (tipo ("unit") type-unit)
+    (tipo ("ref" "(" tipo ")" ) type-ref)
+    (tipo ("(" (separated-list tipo ",")
+               "->" tipo ")") type-tipo)
+    (tipo (identificador) type-identificador)
+    ;;Expresiones del lenguaje
+    (expresion (numero) int-exp)
+    (expresion (flotante) float-exp)
+    (expresion (cadena) string-exp)
+    (expresion (caracter) char-exp)
+    (expresion ("true") true-exp)
+    (expresion ("false") false-exp)
+    (expresion ("unit") unit-exp)
+    (expresion (identificador) identificador-exp)
+    (expresion ("let" (separated-list ligadura "," )
+                "in" expresion "end") let-exp)
+
+    (ligadura  
+     (identificador "=" expresion) ligadura-exp)
+    
+     (expresion ("ref" "(" expresion ")") ref-exp)
+     (expresion ("deref" "(" expresion ")") deref-exp)
+     (expresion ("set" expresion ":=" expresion) set-exp)
+     (expresion ("begin" expresion
+             (arbno ";" expresion) "end") begin-exp)
+     (expresion ("if" expresion "then" expresion
+        (arbno "elif" expresion "then" expresion)
+        "else" expresion "end") if-exp)
+     (expresion ("while" expresion "do" expresion "end") while-exp)
+     (expresion (primitiva "(" (separated-list expresion
+       ",") ")") prim-exp)
+     (expresion  ("proc" "(" (separated-list parametro ",") ")"
+      expresion "end") proc-exp)
+     ;;
+     (parametro (identificador ":" tipo) un-parametro)
+
+     (expresion
+     ("apply" expresion "(" (separated-list expresion ",") ")")
+     apply-exp)
+     
+     (expresion
+      ("letrec"
+      (arbno tipo identificador
+             "(" (separated-list parametro ",") ")"
+             "=" expresion)
+      "in" expresion "end")
+     letrec-exp)
+
+     (expresion ("atomic" expresion "onfail"
+       "(" identificador ")" expresion "end")
+     atomic-exp)
+
+     (expresion ("abort" "(" expresion ")") abort-exp)
+
+     (expresion ("new" identificador "{"
+      (separated-list ligadura ",") "}") new-exp)
+      
+     (expresion ("field"
+      "(" expresion "," identificador ")") field-exp)
+
+     ;; Primitivas aritmeticas
+    (primitiva ("+") sum-prim)
+    (primitiva ("-") minus-prim)
+    (primitiva ("*") mult-prim)
+    (primitiva ("/") div-prim)
+    (primitiva ("%") mod-prim)
+
+    ;; Primitivas relacionales
+    (primitiva (">") mayor-prim)
+    (primitiva ("<") menor-prim)
+    (primitiva (">=") mayorigual-prim)
+    (primitiva ("<=") menorigual-prim)
+    (primitiva ("==") igual-prim)
+    (primitiva ("!=") no-es-igual-prim)
+
+    ;; Primitivas booleanas originales
+    (primitiva ("and") and-prim)
+    (primitiva ("or") or-prim)
+    (primitiva ("not") not-prim)
+
+    ;;Primitivas para concatenar o ver cantidad de una lista
+    (primitiva ("concat") concat-prim)
+    (primitiva ("length") length-prim)
+
+    ;;Primitivas de conversion
+    (primitiva ("to-string") to-string-prim)
+    (primitiva ("to-number") to-number-prim)
+    ;;Primitiva de output
+    (primitiva ("print") print-prim)
+    
+    ))
 
 (sllgen:make-define-datatypes especificacion-lexica especificacion-gramatical)
 
@@ -55,12 +175,16 @@
 (define unparse
   (lambda (pgm)
     (cases programa pgm
-      (un-programa (cuerpo) (unparse-expresion cuerpo)))))
+  (un-programa (declaraciones cuerpo)
+    (unparse-expresion cuerpo)))
+    ))
+    ;;(cases programa pgm
+      ;;(un-programa (cuerpo) (unparse-expresion cuerpo)))))
 
 (define unparse-expresion
   (lambda (exp)
     (cases expresion exp
-      (lit-exp (n) (number->string n)))))
+      (int-exp (n) (number->string n)))))
 
 ;;; ==========================================================
 ;;; 4. TAD ambiente
