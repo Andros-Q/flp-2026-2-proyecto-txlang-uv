@@ -369,6 +369,18 @@
                        " in "
                        (unparse-expresion cuerpo)
                        " end"))
+      (atomic-exp (cuerpo identificador manejador)
+        (string-append "atomic "
+                       (unparse-expresion cuerpo)
+                       " onfail ("
+                       (symbol->string identificador)
+                       ") "
+                       (unparse-expresion manejador)
+                       " end"))
+      (abort-exp (mensaje)
+        (string-append "abort("
+                       (unparse-expresion mensaje)
+                       ")"))
       (else
        (eopl:error 'unparse
                    "esta expresión todavía no se escribe: ~s" exp)))))
