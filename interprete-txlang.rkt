@@ -172,19 +172,206 @@
 ;;; 3. Unparse: del árbol de sintaxis abstracta al texto
 ;;; ==========================================================
 
+;; Une una lista de textos con el separador indicado. La uso para las
+;; listas de campos, parametros, argumentos y demas
+(define unir-textos
+  (lambda (textos separador)
+    (cond
+      ((null? textos) "")
+      ((null? (cdr textos)) (car textos))
+      (else (string-append (car textos)
+                           separador
+                           (unir-textos (cdr textos) separador))))))
+
+;; El scanner guarda el lexema completo de cadenas y caracteres,
+;; o sea que trae las comillas. Si el texto ya viene entre comillas lo dejo
+;; igual; si no, se las pongo para que vuelva a parsear.
+(define texto-cadena
+  (lambda (s)
+    (if (and (>= (string-length s) 2)
+             (char=? (string-ref s 0) #\")
+             (char=? (string-ref s (- (string-length s) 1)) #\"))
+        s
+        (string-append "\"" s "\""))))
+
+(define texto-caracter
+  (lambda (s)
+    (if (and (>= (string-length s) 2)
+             (char=? (string-ref s 0) #\')
+             (char=? (string-ref s (- (string-length s) 1)) #\'))
+        s
+        (string-append "'" s "'"))))
+
 (define unparse
   (lambda (pgm)
     (cases programa pgm
-  (un-programa (declaraciones cuerpo)
-    (unparse-expresion cuerpo)))
-    ))
-    ;;(cases programa pgm
-      ;;(un-programa (cuerpo) (unparse-expresion cuerpo)))))
+      (un-programa (declaraciones cuerpo)
+        (if (null? declaraciones)
+            (unparse-expresion cuerpo)
+            (eopl:error 'unparse
+                        "todavía no escribo las declaraciones record"))))))
+
+(define unparse-tipo
+  (lambda (t)
+    (cases tipo t
+      (type-int () "int")
+      (type-float () "float")
+      (type-bool () "bool")
+      (type-string () "string")
+      (type-char () "char")
+      (type-unit () "unit")
+      (type-ref (tipo-interno)
+        (string-append "ref(" (unparse-tipo tipo-interno) ")"))
+      (type-tipo (tipos retorno)
+        (string-append "("
+                       (unir-textos (map unparse-tipo tipos) ", ")
+                       " -> "
+                       (unparse-tipo retorno)
+                       ")"))
+      (type-identificador (nombre)
+        (symbol->string nombre)))))
+
+(define unparse-parametro
+  (lambda (param)
+    (cases parametro param
+      (un-parametro (nombre tipo)
+        (string-append (symbol->string nombre)
+                       ": "
+                       (unparse-tipo tipo))))))
+
+(define unparse-ligadura
+  (lambda (lig)
+    (cases ligadura lig
+      (ligadura-exp (nombre exp)
+        (string-append (symbol->string nombre)
+                       " = "
+                       (unparse-expresion exp))))))
+
+(define unparse-primitiva
+  (lambda (prim)
+    (cases primitiva prim
+      (sum-prim () "+")
+      (minus-prim () "-")
+      (mult-prim () "*")
+      (div-prim () "/")
+      (mod-prim () "%")
+      (mayor-prim () ">")
+      (menor-prim () "<")
+      (mayorigual-prim () ">=")
+      (menorigual-prim () "<=")
+      (igual-prim () "==")
+      (no-es-igual-prim () "!=")
+      (and-prim () "and")
+      (or-prim () "or")
+      (not-prim () "not")
+      (concat-prim () "concat")
+      (length-prim () "length")
+      (to-string-prim () "to-string")
+      (to-number-prim () "to-number")
+      (print-prim () "print"))))
+
+;; Las ramas elif vienen en dos listas paralelas: primero las condiciones
+;; y despues los cuerpos. Las recorro al mismo tiempo.
+(define unparse-elifs
+  (lambda (condiciones cuerpos)
+    (if (null? condiciones)
+        ""
+        (string-append " elif "
+                       (unparse-expresion (car condiciones))
+                       " then "
+                       (unparse-expresion (car cuerpos))
+                       (unparse-elifs (cdr condiciones) (cdr cuerpos))))))
 
 (define unparse-expresion
   (lambda (exp)
     (cases expresion exp
-      (int-exp (n) (number->string n)))))
+      (int-exp (n)
+        (number->string n))
+      (float-exp (n)
+        (number->string n))
+      (string-exp (s)
+        (texto-cadena s))
+      (char-exp (s)
+        (texto-caracter s))
+      (true-exp () "true")
+      (false-exp () "false")
+      (unit-exp () "unit")
+      (identificador-exp (nombre)
+        (symbol->string nombre))
+      (let-exp (ligaduras cuerpo)
+        (string-append "let "
+                       (unir-textos (map unparse-ligadura ligaduras) ", ")
+                       " in "
+                       (unparse-expresion cuerpo)
+                       " end"))
+      (ref-exp (expresion)
+        (string-append "ref(" (unparse-expresion expresion) ")"))
+      (deref-exp (expresion)
+        (string-append "deref(" (unparse-expresion expresion) ")"))
+      (set-exp (izquierda derecha)
+        (string-append "set "
+                       (unparse-expresion izquierda)
+                       " := "
+                       (unparse-expresion derecha)))
+      (begin-exp (primera resto)
+        (string-append "begin "
+                       (unir-textos
+                        (map unparse-expresion (cons primera resto))
+                        "; ")
+                       " end"))
+      (if-exp (prueba entonces elifs elif-cuerpos sino)
+        (string-append "if "
+                       (unparse-expresion prueba)
+                       " then "
+                       (unparse-expresion entonces)
+                       (unparse-elifs elifs elif-cuerpos)
+                       " else "
+                       (unparse-expresion sino)
+                       " end"))
+      (while-exp (condicion cuerpo)
+        (string-append "while "
+                       (unparse-expresion condicion)
+                       " do "
+                       (unparse-expresion cuerpo)
+                       " end"))
+      (prim-exp (prim args)
+        (string-append (unparse-primitiva prim)
+                       "("
+                       (unir-textos (map unparse-expresion args) ", ")
+                       ")"))
+      (proc-exp (parametros cuerpo)
+        (string-append "proc ("
+                       (unir-textos (map unparse-parametro parametros) ", ")
+                       ") "
+                       (unparse-expresion cuerpo)
+                       " end"))
+      (apply-exp (operador args)
+        (string-append "apply "
+                       (unparse-expresion operador)
+                       "("
+                       (unir-textos (map unparse-expresion args) ", ")
+                       ")"))
+      (letrec-exp (tipos nombres parametros cuerpos cuerpo)
+        (string-append "letrec "
+                       (unir-textos
+                        (map (lambda (tipo nombre params exp)
+                               (string-append (unparse-tipo tipo)
+                                              " "
+                                              (symbol->string nombre)
+                                              " ("
+                                              (unir-textos
+                                               (map unparse-parametro params)
+                                               ", ")
+                                              ") = "
+                                              (unparse-expresion exp)))
+                             tipos nombres parametros cuerpos)
+                        " ")
+                       " in "
+                       (unparse-expresion cuerpo)
+                       " end"))
+      (else
+       (eopl:error 'unparse
+                   "esta expresión todavía no se escribe: ~s" exp)))))
 
 ;;; ==========================================================
 ;;; 4. TAD ambiente
@@ -231,7 +418,9 @@
 (define value-of
   (lambda (exp amb)
     (cases expresion exp
-      (lit-exp (n) n))))
+      (int-exp (n) n)
+      (float-exp (n) n)
+      (else (eopl:error 'value-of "todavía no evalúo esta expresión: ~s" exp)))))
 
 ;;; ==========================================================
 ;;; 9. Interfaz
@@ -243,7 +432,8 @@
       (begin
         (chequear-programa pgm)
         (cases programa pgm
-          (un-programa (cuerpo) (value-of cuerpo 'ambiente-vacio)))))))
+          (un-programa (declaraciones cuerpo)
+            (value-of cuerpo 'ambiente-vacio)))))))
 
 ;; Lo que usan las baterías: un texto de TxLang-UV y el valor como texto.
 (define correr
