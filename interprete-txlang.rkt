@@ -202,14 +202,38 @@
         s
         (string-append "'" s "'"))))
 
+;; Cada declaracion record va en su propia linea y despues va el cuerpo.
 (define unparse
   (lambda (pgm)
     (cases programa pgm
       (un-programa (declaraciones cuerpo)
         (if (null? declaraciones)
             (unparse-expresion cuerpo)
-            (eopl:error 'unparse
-                        "todavía no escribo las declaraciones record"))))))
+            (string-append
+             (unir-textos
+              (map (lambda (d)
+                     (string-append (unparse-decl-registro d) "\n"))
+                   declaraciones)
+              "")
+             (unparse-expresion cuerpo)))))))
+
+(define unparse-decl-registro
+  (lambda (decl)
+    (cases decl-registro decl
+      (decl-program (nombre campos)
+        (string-append "record "
+                       (symbol->string nombre)
+                       " { "
+                       (unir-textos (map unparse-campo campos) ", ")
+                       " }")))))
+
+(define unparse-campo
+  (lambda (campo)
+    (cases campo-register campo
+      (un-campo (nombre tipo)
+        (string-append (symbol->string nombre)
+                       ": "
+                       (unparse-tipo tipo))))))
 
 (define unparse-tipo
   (lambda (t)
@@ -369,9 +393,30 @@
                        " in "
                        (unparse-expresion cuerpo)
                        " end"))
-      (else
-       (eopl:error 'unparse
-                   "esta expresión todavía no se escribe: ~s" exp)))))
+      (atomic-exp (cuerpo identificador manejador)
+        (string-append "atomic "
+                       (unparse-expresion cuerpo)
+                       " onfail ("
+                       (symbol->string identificador)
+                       ") "
+                       (unparse-expresion manejador)
+                       " end"))
+      (abort-exp (mensaje)
+        (string-append "abort("
+                       (unparse-expresion mensaje)
+                       ")"))
+      (new-exp (nombre campos)
+        (string-append "new "
+                       (symbol->string nombre)
+                       " { "
+                       (unir-textos (map unparse-ligadura campos) ", ")
+                       " }"))
+      (field-exp (registro campo)
+        (string-append "field("
+                       (unparse-expresion registro)
+                       ", "
+                       (symbol->string campo)
+                       ")")))))
 
 ;;; ==========================================================
 ;;; 4. TAD ambiente
