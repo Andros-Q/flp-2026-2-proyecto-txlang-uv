@@ -423,6 +423,63 @@
 ;;; ==========================================================
 ;; Liga identificadores a valores. Su interfaz va aparte de la del almacén.
 
+;;Creacion de datatype de ambiente con su variante de ambiente extendido y otra variante de ambiente recursivo
+(define-datatype  ambiente ambiente?
+  (ambiente-vacio)
+  (ambiente-extendido (ids (list-of symbol?))
+                      (valores list?)
+                      (env-old ambiente?))
+  (ambiente-recursivo
+           (proc-names (list-of symbol?))
+           (idss list?)
+           (bodies (list-of expresion?))
+           (env-old ambiente?))
+  )
+
+;; apply-env : ambiente x symbol -> valor
+;; Busca el identificador en el ambiente, respetando el shadowing de las
+;; ligaduras más recientes, y levanta eopl:error si no está ligado.
+(define apply-env
+  (lambda (env id)
+    (cases ambiente env
+      (ambiente-vacio () (eopl:error 'apply-env "No se
+    encontro el identificador ")) ;;Caso base de la recursion
+      (ambiente-extendido (ids valores old-env)
+           (letrec ;;funcion auxiliar para recorrer la lista de simbolos y de valores
+               (
+                [buscar-listas
+                 (lambda (id ids valores)
+                   (cond
+                   [(null? ids) (apply-env old-env id)] ;;Si la lista de id's es nula se ejecuta de nuevo la funcion apply-env pero con el ambiente anterior 
+                   [(eq? (car ids) id) (car valores)] ;;para saber si algun id de la lista coincide con el id del valor que el interprete necesita buscar y poder devolver un valor
+                   [else (buscar-listas id (cdr ids) (cdr valores))] ;;Recorre ambas listas recursivamente hasta encontrar el valor de lo contrario devuelve error de que no se encontro
+                   )
+                  )]
+                )
+               (buscar-listas id ids valores) ;;Llama ala funcion auxiliar para saber si ese id esta ligado a un valor
+             )
+           )
+      (ambiente-recursivo (proc-names idss bodies old-env)
+           (letrec(
+               [buscar-procname
+                (lambda (proc-names idss bodies currently-env)
+                  (cond
+                    [(null? proc-names)
+                     (apply-env old-env id)]
+                    [(eq? (car proc-names) id) ;;Si el nombre del procedimiento coincide con el que se esta buscando se devuelve una clausula con lista de id, body en AST y ambiente actual
+                      (cerradura (car idss) (car bodies)
+                        currently-env)]
+                    [else (buscar-procname (cdr proc-names);;Se recorren las listas de procnames,de identificadores y de los cuerpos 
+                     (cdr idss) (cdr bodies) currently-env)]   
+                   )
+                )]    
+            )
+                (buscar-procname proc-names idss bodies env);;Llamo funcion auxiliar
+            )
+       )
+  )))
+
+
 ;;; ==========================================================
 ;;; 5. TAD almacén
 ;;; ==========================================================
@@ -436,6 +493,13 @@
 ;;; ==========================================================
 ;; Un define-datatype con los valores del lenguaje y valor->texto, que es
 ;; lo que imprime correr.
+
+;;Datatype del procedure (cerradura)clausula donde se guarda el contenido de la funcion recursiva 
+(define-datatype procval procval?
+  (cerradura
+    (parametros list?)
+    (cuerpo expresion?)
+    (ambiente ambiente?)))
 
 (define valor->texto
   (lambda (v)
