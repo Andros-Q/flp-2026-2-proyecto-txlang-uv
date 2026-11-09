@@ -560,6 +560,15 @@
     (cuerpo expresion?)
     (ambiente ambiente?)))
 
+(define entero-txl?
+  (lambda (v) (and (integer? v) (exact? v))))
+
+(define flotante-txl?
+  (lambda (v) (and (real? v) (inexact? v))))
+
+(define numero-txl?
+  (lambda (v) (or (entero-txl? v) (flotante-txl? v))))
+
 ;; Convierte el valor que devuelve value-of en el texto que imprime correr.
 ;; Las cadenas y los caracteres se escriben con sus comillas, igual que en el
 ;; programa. Las referencias y los procedimientos no tienen literal propio,
@@ -630,6 +639,28 @@
         (eopl:error 'value-of
                     "La primitiva ~s necesita ~s argumentos"
                     nombre cantidad))))
+
+(define comprobar-numeros
+  (lambda (args nombre)
+    (if (and (numero-txl? (car args)) (numero-txl? (cadr args)))
+        args
+        (eopl:error 'value-of
+                    "La primitiva ~s necesita dos numeros y recibio: ~s y ~s"
+                    nombre (car args) (cadr args)))))
+
+(define comprobar-enteros
+  (lambda (args nombre)
+    (if (and (entero-txl? (car args)) (entero-txl? (cadr args)))
+        args
+        (eopl:error 'value-of
+                    "La primitiva ~s solo acepta enteros y recibio: ~s y ~s"
+                    nombre (car args) (cadr args)))))
+
+(define valor-a-imprimir
+  (lambda (v)
+    (if (or (referencia-interprete? v) (procval? v))
+        (valor->texto v)
+        (valor-interprete-a-texto v))))
 
 ;; Obtiene el nombre de un parametro.
 (define nombre-parametro
@@ -715,27 +746,32 @@
       ;; Primitivas aritmeticas
       (sum-prim ()
         (comprobar-argumentos args 2 '+)
+        (comprobar-numeros args '+)
         (+ (car args) (cadr args)))
 
       (minus-prim ()
         (comprobar-argumentos args 2 '-)
+        (comprobar-numeros args '-)
         (- (car args) (cadr args)))
 
       (mult-prim ()
         (comprobar-argumentos args 2 '*)
+        (comprobar-numeros args '*)
         (* (car args) (cadr args)))
 
       (div-prim ()
         (comprobar-argumentos args 2 '/)
+        (comprobar-numeros args '/)
         (if (zero? (cadr args))
             (eopl:error 'value-of "Division por cero")
-            (if (and (integer? (car args))
-                     (integer? (cadr args)))
+            (if (and (entero-txl? (car args))
+                     (entero-txl? (cadr args)))
                 (quotient (car args) (cadr args))
                 (/ (car args) (cadr args)))))
 
       (mod-prim ()
         (comprobar-argumentos args 2 '%)
+        (comprobar-enteros args '%)
         (if (zero? (cadr args))
             (eopl:error 'value-of "Division por cero")
             (remainder (car args) (cadr args))))
@@ -743,18 +779,22 @@
       ;; Primitivas relacionales
       (mayor-prim ()
         (comprobar-argumentos args 2 '>)
+        (comprobar-numeros args '>)
         (> (car args) (cadr args)))
 
       (menor-prim ()
         (comprobar-argumentos args 2 '<)
+        (comprobar-numeros args '<)
         (< (car args) (cadr args)))
 
       (mayorigual-prim ()
         (comprobar-argumentos args 2 '>=)
+        (comprobar-numeros args '>=)
         (>= (car args) (cadr args)))
 
       (menorigual-prim ()
         (comprobar-argumentos args 2 '<=)
+        (comprobar-numeros args '<=)
         (<= (car args) (cadr args)))
 
       (igual-prim ()
@@ -816,7 +856,7 @@
       ;; Primitiva de output
       (print-prim ()
         (comprobar-argumentos args 1 'print)
-        (display (valor-interprete-a-texto (car args)))
+        (display (valor-a-imprimir (car args)))
         (newline)
         'unit))))
 
