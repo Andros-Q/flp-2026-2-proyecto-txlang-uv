@@ -420,17 +420,17 @@
 ;; Liga identificadores a valores. Su interfaz va aparte de la del almacén.
 
 ;;Creacion de datatype de ambiente con su variante de ambiente extendido y otra variante de ambiente recursivo
-(define-datatype ambiente ambiente?
+(define-datatype  ambiente ambiente?
   (ambiente-vacio)
-  (ambiente-extendido
-    (ids (list-of symbol?))
-    (valores list?)
-    (env-old ambiente?))
+  (ambiente-extendido (ids (list-of symbol?))
+                      (valores list?)
+                      (env-old ambiente?))
   (ambiente-recursivo
-    (proc-names (list-of symbol?))
-    (idss list?)
-    (bodies (list-of expresion?))
-    (env-old ambiente?)))
+           (proc-names (list-of symbol?))
+           (idss list?)
+           (bodies (list-of expresion?))
+           (env-old ambiente?))
+  )
 
 ;; apply-env : ambiente x symbol -> valor
 ;; Busca el identificador en el ambiente, respetando el shadowing de las
@@ -447,13 +447,14 @@
             ((buscar-listas
               (lambda (id ids valores)
                 (cond
-                  ((null? ids)
+                  ((null? ids) ;;Si la lista de id's es nula se ejecuta de nuevo la funcion apply-env pero con el ambiente anterior 
                    (apply-env env-old id))
-                  ((eq? (car ids) id)
+                  ((eq? (car ids) id) ;;para saber si algun id de la lista coincide con el id del valor que el interprete necesita buscar y poder devolver un valor
                    (car valores))
-                  (else
+                  (else            ;;Recorre ambas listas recursivamente hasta encontrar el valor de lo contrario devuelve error de que no se encontro         
                    (buscar-listas id (cdr ids) (cdr valores)))))))
-          (buscar-listas id ids valores)))
+          (buscar-listas id ids valores);;Llama ala funcion auxiliar para saber si ese id esta ligado a un valor
+          ))
       (ambiente-recursivo (proc-names idss bodies env-old)
         (letrec
             ((buscar-procname
@@ -461,15 +462,17 @@
                 (cond
                   ((null? proc-names)
                    (apply-env env-old id))
-                  ((eq? (car proc-names) id)
+                  ((eq? (car proc-names) id);;Si el nombre del procedimiento coincide con el que se esta buscando se devuelve una clausula con lista de id, body en AST y ambiente actual
                    (cerradura (car idss) (car bodies)
                               currently-env))
-                  (else
+                  (else            ;;Se recorren las listas de procnames,de identificadores y de los cuerpos         
                    (buscar-procname (cdr proc-names)
                                     (cdr idss)
                                     (cdr bodies)
                                     currently-env))))))
-          (buscar-procname proc-names idss bodies env))))))
+          (buscar-procname proc-names idss bodies env) ;;Llamo funcion auxiliar
+          )
+        ))))
 
 ;;; ==========================================================
 ;;; 5. TAD almacén
