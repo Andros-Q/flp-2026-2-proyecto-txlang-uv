@@ -23,20 +23,18 @@
 ;;; ==========================================================
 ;;; 1. Especificación léxica
 ;;; ==========================================================
-;; Los dos tipos de comentario, los literales de cada clase y los
-;; identificadores. El comentario de bloque no admite | adentro.
 
 (define especificacion-lexica
   '((espacio (whitespace) skip)
     ;;Comentario una linea
     (comentario ("//" (arbno (not #\newline))) skip)
     ;;Comentario Bloque
-     (comentario ("#|" (arbno (not #\|)) "|#") skip)
-     ;;Numeros Flotantes positivos
-    (flotante (digit (arbno digit) "." digit(arbno digit))number)
+    (comentario ("#|" (arbno (not #\|)) "|#") skip)
+    ;;Numeros Flotantes positivos
+    (flotante (digit (arbno digit) "." digit (arbno digit)) number)
     ;;Numeros Flotantes negativos
-    (flotante ("-" digit (arbno digit) "." digit(arbno digit))number)
-    ;;Numeros enteros 
+    (flotante ("-" digit (arbno digit) "." digit (arbno digit)) number)
+    ;;Numeros enteros
     (numero (digit (arbno digit)) number)
     ;;Numeros enteros negativos
     (numero ("-" digit (arbno digit)) number)
@@ -45,14 +43,12 @@
     ;;Chars caracteres
     (caracter ("'" any "'") string)
     ;;Cadenas de texto
-    (cadena ("\"" (arbno (not #\")) "\"" ) string)
+    (cadena ("\"" (arbno (not #\")) "\"") string)
     ))
 
 ;;; ==========================================================
 ;;; 2. Especificación gramatical
 ;;; ==========================================================
-;; Un datatype por no terminal: programa, declaración de registro, tipo,
-;; expresión y primitiva. Los nombres de las variantes los escoge el grupo.
 
 (define especificacion-gramatical
   '((programa ((arbno decl-registro) expresion) un-programa)
@@ -83,50 +79,50 @@
     (expresion ("let" (separated-list ligadura "," )
                 "in" expresion "end") let-exp)
 
-    (ligadura  
+    (ligadura
      (identificador "=" expresion) ligadura-exp)
-    
-     (expresion ("ref" "(" expresion ")") ref-exp)
-     (expresion ("deref" "(" expresion ")") deref-exp)
-     (expresion ("set" expresion ":=" expresion) set-exp)
-     (expresion ("begin" expresion
+
+    (expresion ("ref" "(" expresion ")") ref-exp)
+    (expresion ("deref" "(" expresion ")") deref-exp)
+    (expresion ("set" expresion ":=" expresion) set-exp)
+    (expresion ("begin" expresion
              (arbno ";" expresion) "end") begin-exp)
-     (expresion ("if" expresion "then" expresion
+    (expresion ("if" expresion "then" expresion
         (arbno "elif" expresion "then" expresion)
         "else" expresion "end") if-exp)
-     (expresion ("while" expresion "do" expresion "end") while-exp)
-     (expresion (primitiva "(" (separated-list expresion
+    (expresion ("while" expresion "do" expresion "end") while-exp)
+    (expresion (primitiva "(" (separated-list expresion
        ",") ")") prim-exp)
-     (expresion  ("proc" "(" (separated-list parametro ",") ")"
+    (expresion ("proc" "(" (separated-list parametro ",") ")"
       expresion "end") proc-exp)
-     ;;
-     (parametro (identificador ":" tipo) un-parametro)
+    ;;
+    (parametro (identificador ":" tipo) un-parametro)
 
-     (expresion
+    (expresion
      ("apply" expresion "(" (separated-list expresion ",") ")")
      apply-exp)
-     
-     (expresion
-      ("letrec"
+
+    (expresion
+     ("letrec"
       (arbno tipo identificador
              "(" (separated-list parametro ",") ")"
              "=" expresion)
       "in" expresion "end")
      letrec-exp)
 
-     (expresion ("atomic" expresion "onfail"
+    (expresion ("atomic" expresion "onfail"
        "(" identificador ")" expresion "end")
      atomic-exp)
 
-     (expresion ("abort" "(" expresion ")") abort-exp)
+    (expresion ("abort" "(" expresion ")") abort-exp)
 
-     (expresion ("new" identificador "{"
+    (expresion ("new" identificador "{"
       (separated-list ligadura ",") "}") new-exp)
-      
-     (expresion ("field"
+
+    (expresion ("field"
       "(" expresion "," identificador ")") field-exp)
 
-     ;; Primitivas aritmeticas
+    ;; Primitivas aritmeticas
     (primitiva ("+") sum-prim)
     (primitiva ("-") minus-prim)
     (primitiva ("*") mult-prim)
@@ -155,7 +151,7 @@
     (primitiva ("to-number") to-number-prim)
     ;;Primitiva de output
     (primitiva ("print") print-prim)
-    
+
     ))
 
 (sllgen:make-define-datatypes especificacion-lexica especificacion-gramatical)
@@ -424,17 +420,17 @@
 ;; Liga identificadores a valores. Su interfaz va aparte de la del almacén.
 
 ;;Creacion de datatype de ambiente con su variante de ambiente extendido y otra variante de ambiente recursivo
-(define-datatype  ambiente ambiente?
+(define-datatype ambiente ambiente?
   (ambiente-vacio)
-  (ambiente-extendido (ids (list-of symbol?))
-                      (valores list?)
-                      (env-old ambiente?))
+  (ambiente-extendido
+    (ids (list-of symbol?))
+    (valores list?)
+    (env-old ambiente?))
   (ambiente-recursivo
-           (proc-names (list-of symbol?))
-           (idss list?)
-           (bodies (list-of expresion?))
-           (env-old ambiente?))
-  )
+    (proc-names (list-of symbol?))
+    (idss list?)
+    (bodies (list-of expresion?))
+    (env-old ambiente?)))
 
 ;; apply-env : ambiente x symbol -> valor
 ;; Busca el identificador en el ambiente, respetando el shadowing de las
@@ -442,51 +438,114 @@
 (define apply-env
   (lambda (env id)
     (cases ambiente env
-      (ambiente-vacio () (eopl:error 'apply-env "No se
-    encontro el identificador ")) ;;Caso base de la recursion
-      (ambiente-extendido (ids valores old-env)
-           (letrec ;;funcion auxiliar para recorrer la lista de simbolos y de valores
-               (
-                [buscar-listas
-                 (lambda (id ids valores)
-                   (cond
-                   [(null? ids) (apply-env old-env id)] ;;Si la lista de id's es nula se ejecuta de nuevo la funcion apply-env pero con el ambiente anterior 
-                   [(eq? (car ids) id) (car valores)] ;;para saber si algun id de la lista coincide con el id del valor que el interprete necesita buscar y poder devolver un valor
-                   [else (buscar-listas id (cdr ids) (cdr valores))] ;;Recorre ambas listas recursivamente hasta encontrar el valor de lo contrario devuelve error de que no se encontro
-                   )
-                  )]
-                )
-               (buscar-listas id ids valores) ;;Llama ala funcion auxiliar para saber si ese id esta ligado a un valor
-             )
-           )
-      (ambiente-recursivo (proc-names idss bodies old-env)
-           (letrec(
-               [buscar-procname
-                (lambda (proc-names idss bodies currently-env)
-                  (cond
-                    [(null? proc-names)
-                     (apply-env old-env id)]
-                    [(eq? (car proc-names) id) ;;Si el nombre del procedimiento coincide con el que se esta buscando se devuelve una clausula con lista de id, body en AST y ambiente actual
-                      (cerradura (car idss) (car bodies)
-                        currently-env)]
-                    [else (buscar-procname (cdr proc-names);;Se recorren las listas de procnames,de identificadores y de los cuerpos 
-                     (cdr idss) (cdr bodies) currently-env)]   
-                   )
-                )]    
-            )
-                (buscar-procname proc-names idss bodies env);;Llamo funcion auxiliar
-            )
-       )
-  )))
-
+      (ambiente-vacio ()
+        (eopl:error 'apply-env
+                    "No se encontro el identificador: ~s"
+                    id))
+      (ambiente-extendido (ids valores env-old)
+        (letrec
+            ((buscar-listas
+              (lambda (id ids valores)
+                (cond
+                  ((null? ids)
+                   (apply-env env-old id))
+                  ((eq? (car ids) id)
+                   (car valores))
+                  (else
+                   (buscar-listas id (cdr ids) (cdr valores)))))))
+          (buscar-listas id ids valores)))
+      (ambiente-recursivo (proc-names idss bodies env-old)
+        (letrec
+            ((buscar-procname
+              (lambda (proc-names idss bodies currently-env)
+                (cond
+                  ((null? proc-names)
+                   (apply-env env-old id))
+                  ((eq? (car proc-names) id)
+                   (cerradura (car idss) (car bodies)
+                              currently-env))
+                  (else
+                   (buscar-procname (cdr proc-names)
+                                    (cdr idss)
+                                    (cdr bodies)
+                                    currently-env))))))
+          (buscar-procname proc-names idss bodies env))))))
 
 ;;; ==========================================================
 ;;; 5. TAD almacén
 ;;; ==========================================================
-;; Celdas que se reservan con ref, se leen con deref y se escriben con set.
-;; En la primera entrega las escrituras son definitivas; en la segunda el
-;; almacén lleva el registro que permite revertir un bloque atomic. Conviene
-;; diseñar la interfaz desde ahora pensando en eso.
+
+;; El almacen se representa mediante una lista.
+;; Cada posicion de la lista representa una ubicacion.
+;;
+;; Ejemplo:
+;;   Ubicacion 0 -> primer elemento
+;;   Ubicacion 1 -> segundo elemento
+;;   Ubicacion 2 -> tercer elemento
+;;
+;; En esta primera entrega las modificaciones son definitivas.
+;; En la segunda entrega se ampliara para soportar transacciones.
+
+(define the-store '())
+
+;; Inicializa el almacen vacio.
+(define initialize-store!
+  (lambda ()
+    (set! the-store '())))
+
+;; Comprueba que una ubicacion exista en el almacen.
+(define referencia-valida?
+  (lambda (ubicacion)
+    (and (integer? ubicacion)
+         (>= ubicacion 0)
+         (< ubicacion (length the-store)))))
+
+;; Reserva una nueva celda y devuelve su ubicacion.
+(define newref
+  (lambda (valor)
+    (let ((ubicacion (length the-store)))
+      (begin
+        (set! the-store (append the-store (list valor)))
+        ubicacion))))
+
+;; Consulta el contenido de una ubicacion.
+(define deref
+  (lambda (ubicacion)
+    (if (referencia-valida? ubicacion)
+        (list-ref the-store ubicacion)
+        (eopl:error 'deref
+                    "ubicacion invalida: ~s"
+                    ubicacion))))
+
+;; Funcion auxiliar que reemplaza un elemento de una lista.
+(define reemplazar-posicion
+  (lambda (lista posicion nuevo-valor)
+    (cond
+      ((null? lista)
+       (eopl:error 'reemplazar-posicion
+                   "posicion inexistente: ~s"
+                   posicion))
+      ((= posicion 0)
+       (cons nuevo-valor (cdr lista)))
+      (else
+       (cons (car lista)
+             (reemplazar-posicion
+              (cdr lista)
+              (- posicion 1)
+              nuevo-valor))))))
+
+;; Modifica el contenido de una ubicacion existente.
+(define setref!
+  (lambda (ubicacion nuevo-valor)
+    (if (referencia-valida? ubicacion)
+        (begin
+          (set! the-store
+                (reemplazar-posicion
+                 the-store ubicacion nuevo-valor))
+          'unit)
+        (eopl:error 'setref!
+                    "ubicacion invalida: ~s"
+                    ubicacion))))
 
 ;;; ==========================================================
 ;;; 6. Valores expresados
@@ -494,17 +553,27 @@
 ;; Un define-datatype con los valores del lenguaje y valor->texto, que es
 ;; lo que imprime correr.
 
-;;Datatype del procedure (cerradura)clausula donde se guarda el contenido de la funcion recursiva 
+;;Datatype del procedure (cerradura)clausula donde se guarda el contenido de la funcion recursiva
 (define-datatype procval procval?
   (cerradura
     (parametros list?)
     (cuerpo expresion?)
     (ambiente ambiente?)))
 
+;; Convierte el valor que devuelve value-of en el texto que imprime correr.
+;; Las cadenas y los caracteres se escriben con sus comillas, igual que en el
+;; programa. Las referencias y los procedimientos no tienen literal propio,
+;; por eso se escriben entre < >. Los demas valores (numeros, booleanos y
+;; unit) usan la misma conversion que las primitivas.
 (define valor->texto
   (lambda (v)
-    (cond ((number? v) (number->string v))
-          (else (eopl:error 'valor->texto "no sé escribir el valor ~s" v)))))
+    (cond
+      ((string? v) (string-append "\"" v "\""))
+      ((char? v) (string-append "'" (string v) "'"))
+      ((referencia-interprete? v)
+       (string-append "<ref " (number->string (ubicacion-referencia v)) ">"))
+      ((procval? v) "<procedimiento>")
+      (else (valor-interprete-a-texto v)))))
 
 ;;; ==========================================================
 ;;; 7. Chequeador de tipos (segunda entrega)
@@ -520,16 +589,374 @@
   (lambda (texto)
     (eopl:error 'tipo-del-programa "el chequeador de tipos llega en la segunda entrega")))
 
+
+
 ;;; ==========================================================
 ;;; 8. Interpretador
 ;;; ==========================================================
 
+;; Obtiene el contenido de una cadena quitando las comillas externas.
+(define quitar-comillas
+  (lambda (texto)
+    (if (and (>= (string-length texto) 2)
+             (char=? (string-ref texto 0) #\")
+             (char=? (string-ref texto (- (string-length texto) 1)) #\"))
+        (substring texto 1 (- (string-length texto) 1))
+        texto)))
+
+;; Obtiene el contenido de un caracter quitando las comillas simples.
+(define quitar-comillas-caracter
+  (lambda (texto)
+    (if (and (>= (string-length texto) 2)
+             (char=? (string-ref texto 0) #\')
+             (char=? (string-ref texto (- (string-length texto) 1)) #\'))
+        (substring texto 1 (- (string-length texto) 1))
+        texto)))
+
+;; Comprueba que un valor sea booleano.
+(define comprobar-booleano
+  (lambda (valor expresion)
+    (if (boolean? valor)
+        valor
+        (eopl:error 'value-of
+                    "Se esperaba un booleano en: ~s"
+                    expresion))))
+
+;; Comprueba la cantidad de argumentos de una primitiva.
+(define comprobar-argumentos
+  (lambda (args cantidad nombre)
+    (if (= (length args) cantidad)
+        args
+        (eopl:error 'value-of
+                    "La primitiva ~s necesita ~s argumentos"
+                    nombre cantidad))))
+
+;; Obtiene el nombre de un parametro.
+(define nombre-parametro
+  (lambda (param)
+    (cases parametro param
+      (un-parametro (nombre tipo)
+        nombre))))
+
+;; Obtiene el nombre de una ligadura.
+(define nombre-ligadura
+  (lambda (lig)
+    (cases ligadura lig
+      (ligadura-exp (nombre exp)
+        nombre))))
+
+;; Evalua las expresiones de las ligaduras en el ambiente exterior.
+;; Las ligaduras de un mismo let no se ven entre si.
+(define valores-ligaduras
+  (lambda (ligaduras amb)
+    (if (null? ligaduras)
+        '()
+        (cases ligadura (car ligaduras)
+          (ligadura-exp (nombre exp)
+            (cons (value-of exp amb)
+                  (valores-ligaduras (cdr ligaduras) amb)))))))
+
+;; Evalua las expresiones de una secuencia y devuelve la ultima.
+(define evaluar-secuencia
+  (lambda (primera resto amb)
+    (if (null? resto)
+        (value-of primera amb)
+        (begin
+          (value-of primera amb)
+          (evaluar-secuencia (car resto) (cdr resto) amb)))))
+
+;; Evalua las condiciones elif hasta encontrar una verdadera.
+(define evaluar-elif
+  (lambda (condiciones cuerpos sino amb)
+    (if (null? condiciones)
+        (value-of sino amb)
+        (let ((resultado (comprobar-booleano
+                          (value-of (car condiciones) amb)
+                          (car condiciones))))
+          (if resultado
+              (value-of (car cuerpos) amb)
+              (evaluar-elif (cdr condiciones)
+                            (cdr cuerpos)
+                            sino
+                            amb))))))
+
+;; Ejecuta el ciclo mientras su condicion sea verdadera.
+(define evaluar-while
+  (lambda (condicion cuerpo amb)
+    (let ((resultado (comprobar-booleano
+                      (value-of condicion amb)
+                      condicion)))
+      (if resultado
+          (begin
+            (value-of cuerpo amb)
+            (evaluar-while condicion cuerpo amb))
+          'unit))))
+
+;; Convierte valores del lenguaje a texto para las primitivas.
+(define valor-interprete-a-texto
+  (lambda (valor)
+    (cond
+      ((number? valor) (number->string valor))
+      ((string? valor) valor)
+      ((char? valor) (string valor))
+      ((boolean? valor)
+       (if valor "true" "false"))
+      ((eq? valor 'unit) "unit")
+      (else
+       (eopl:error 'value-of
+                   "No se puede convertir el valor: ~s"
+                   valor)))))
+
+;; Evalua las primitivas del lenguaje.
+(define evaluar-primitiva
+  (lambda (prim args)
+    (cases primitiva prim
+
+      ;; Primitivas aritmeticas
+      (sum-prim ()
+        (comprobar-argumentos args 2 '+)
+        (+ (car args) (cadr args)))
+
+      (minus-prim ()
+        (comprobar-argumentos args 2 '-)
+        (- (car args) (cadr args)))
+
+      (mult-prim ()
+        (comprobar-argumentos args 2 '*)
+        (* (car args) (cadr args)))
+
+      (div-prim ()
+        (comprobar-argumentos args 2 '/)
+        (if (zero? (cadr args))
+            (eopl:error 'value-of "Division por cero")
+            (if (and (integer? (car args))
+                     (integer? (cadr args)))
+                (quotient (car args) (cadr args))
+                (/ (car args) (cadr args)))))
+
+      (mod-prim ()
+        (comprobar-argumentos args 2 '%)
+        (if (zero? (cadr args))
+            (eopl:error 'value-of "Division por cero")
+            (remainder (car args) (cadr args))))
+
+      ;; Primitivas relacionales
+      (mayor-prim ()
+        (comprobar-argumentos args 2 '>)
+        (> (car args) (cadr args)))
+
+      (menor-prim ()
+        (comprobar-argumentos args 2 '<)
+        (< (car args) (cadr args)))
+
+      (mayorigual-prim ()
+        (comprobar-argumentos args 2 '>=)
+        (>= (car args) (cadr args)))
+
+      (menorigual-prim ()
+        (comprobar-argumentos args 2 '<=)
+        (<= (car args) (cadr args)))
+
+      (igual-prim ()
+        (comprobar-argumentos args 2 '==)
+        (equal? (car args) (cadr args)))
+
+      (no-es-igual-prim ()
+        (comprobar-argumentos args 2 '!=)
+        (not (equal? (car args) (cadr args))))
+
+      ;; Primitivas booleanas
+      (and-prim ()
+        (comprobar-argumentos args 2 'and)
+        (and (comprobar-booleano (car args) 'and)
+             (comprobar-booleano (cadr args) 'and)))
+
+      (or-prim ()
+        (comprobar-argumentos args 2 'or)
+        (or (comprobar-booleano (car args) 'or)
+            (comprobar-booleano (cadr args) 'or)))
+
+      (not-prim ()
+        (comprobar-argumentos args 1 'not)
+        (not (comprobar-booleano (car args) 'not)))
+
+      ;; Primitivas para cadenas
+      (concat-prim ()
+        (comprobar-argumentos args 2 'concat)
+        (if (and (string? (car args))
+                 (string? (cadr args)))
+            (string-append (car args) (cadr args))
+            (eopl:error 'value-of
+                        "concat necesita dos cadenas")))
+
+      (length-prim ()
+        (comprobar-argumentos args 1 'length)
+        (if (string? (car args))
+            (string-length (car args))
+            (eopl:error 'value-of
+                        "length necesita una cadena")))
+
+      ;; Primitivas de conversion
+      (to-string-prim ()
+        (comprobar-argumentos args 1 'to-string)
+        (valor-interprete-a-texto (car args)))
+
+      (to-number-prim ()
+        (comprobar-argumentos args 1 'to-number)
+        (if (string? (car args))
+            (let ((numero (string->number (car args))))
+              (if numero
+                  numero
+                  (eopl:error 'value-of
+                              "La cadena no representa un numero: ~s"
+                              (car args))))
+            (eopl:error 'value-of
+                        "to-number necesita una cadena")))
+
+      ;; Primitiva de output
+      (print-prim ()
+        (comprobar-argumentos args 1 'print)
+        (display (valor-interprete-a-texto (car args)))
+        (newline)
+        'unit))))
+
+;; Representacion de las referencias del lenguaje.
+;; La ubicacion real se guarda en el TAD almacen.
+(define referencia-interprete?
+  (lambda (valor)
+    (and (list? valor)
+         (= (length valor) 2)
+         (eq? (car valor) 'referencia)
+         (integer? (cadr valor)))))
+
+;; Obtiene la ubicacion de una referencia.
+(define ubicacion-referencia
+  (lambda (valor)
+    (if (referencia-interprete? valor)
+        (cadr valor)
+        (eopl:error 'value-of
+                    "Se esperaba una referencia y se recibio: ~s"
+                    valor))))
+
+;; Evalua una aplicacion de procedimiento.
+(define aplicar-procedimiento
+  (lambda (procedimiento argumentos)
+    (if (procval? procedimiento)
+        (cases procval procedimiento
+          (cerradura (parametros cuerpo ambiente-guardado)
+            (if (= (length parametros) (length argumentos))
+                (let ((nombres (map nombre-parametro parametros)))
+                  (value-of cuerpo
+                            (ambiente-extendido
+                             nombres
+                             argumentos
+                             ambiente-guardado)))
+                (eopl:error 'value-of
+                            "Cantidad incorrecta de argumentos"))))
+        (eopl:error 'value-of
+                    "Se intento aplicar un valor que no es procedimiento: ~s"
+                    procedimiento))))
+
 (define value-of
   (lambda (exp amb)
     (cases expresion exp
+
+      ;; Literales
       (int-exp (n) n)
       (float-exp (n) n)
-      (else (eopl:error 'value-of "todavía no evalúo esta expresión: ~s" exp)))))
+      (string-exp (s) (quitar-comillas s))
+      (char-exp (s)
+        (let ((contenido (quitar-comillas-caracter s)))
+          (if (= (string-length contenido) 1)
+              (string-ref contenido 0)
+              (eopl:error 'value-of
+                          "Caracter invalido: ~s"
+                          s))))
+      (true-exp () #t)
+      (false-exp () #f)
+      (unit-exp () 'unit)
+
+      ;; Variables
+      (identificador-exp (id)
+        (apply-env amb id))
+
+      ;; Ligaduras locales
+      (let-exp (ligaduras cuerpo)
+        (let ((nombres (map nombre-ligadura ligaduras))
+              (valores (valores-ligaduras ligaduras amb)))
+          (value-of cuerpo
+                    (ambiente-extendido nombres valores amb))))
+
+      ;; Referencias
+      (ref-exp (expresion)
+        (list 'referencia
+              (newref (value-of expresion amb))))
+
+      (deref-exp (expresion)
+        (deref
+         (ubicacion-referencia
+          (value-of expresion amb))))
+
+      (set-exp (izquierda derecha)
+        (let ((referencia (value-of izquierda amb))
+              (nuevo-valor (value-of derecha amb)))
+          (setref! (ubicacion-referencia referencia)
+                   nuevo-valor)
+          'unit))
+
+      ;; Secuencia de expresiones
+      (begin-exp (primera resto)
+        (evaluar-secuencia primera resto amb))
+
+      ;; Condicionales
+      (if-exp (prueba entonces elifs elif-cuerpos sino)
+        (let ((resultado (comprobar-booleano
+                          (value-of prueba amb)
+                          prueba)))
+          (if resultado
+              (value-of entonces amb)
+              (evaluar-elif elifs elif-cuerpos sino amb))))
+
+      ;; Ciclos
+      (while-exp (condicion cuerpo)
+        (evaluar-while condicion cuerpo amb))
+
+      ;; Primitivas
+      (prim-exp (prim args)
+        (evaluar-primitiva
+         prim
+         (map (lambda (arg)
+                (value-of arg amb))
+              args)))
+
+      ;; Procedimientos y clausuras
+      (proc-exp (parametros cuerpo)
+        (cerradura parametros cuerpo amb))
+
+      ;; Aplicacion de procedimientos
+      (apply-exp (operador args)
+        (let ((procedimiento (value-of operador amb))
+              (argumentos
+               (map (lambda (arg)
+                      (value-of arg amb))
+                    args)))
+          (aplicar-procedimiento procedimiento argumentos)))
+
+      ;; Recursion mediante letrec
+      (letrec-exp (tipos nombres parametros cuerpos cuerpo)
+        (let ((ambiente-rec
+               (ambiente-recursivo
+                nombres
+                parametros
+                cuerpos
+                amb)))
+          (value-of cuerpo ambiente-rec)))
+
+      ;; Expresiones reservadas para la segunda entrega.
+      (else
+       (eopl:error 'value-of
+                   "Esta expresion no pertenece al alcance de la primera entrega: ~s"
+                   exp)))))
 
 ;;; ==========================================================
 ;;; 9. Interfaz
@@ -540,9 +967,11 @@
     (let ((pgm (scan&parse texto)))
       (begin
         (chequear-programa pgm)
+        ;; Cada programa empieza con el almacen vacio.
+        (initialize-store!)
         (cases programa pgm
           (un-programa (declaraciones cuerpo)
-            (value-of cuerpo 'ambiente-vacio)))))))
+            (value-of cuerpo (ambiente-vacio))))))))
 
 ;; Lo que usan las baterías: un texto de TxLang-UV y el valor como texto.
 (define correr
